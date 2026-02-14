@@ -1,8 +1,14 @@
 # Manual do Goteira
 
-Este documento fornece instruções completas para instalação e uso das duas versões do software: **Shell Script** (`goteira.sh`) e **Rust** (`goteira`).
+Este documento fornece instruções completas para instalação e uso das duas versões do software: **Shell Script** (`goteira.sh`) e **Rust** (`goteira`). O Gemmini foi responsável pela versão em Rust derivada do script Bash original. O objetivo é fornecer uma versão independente (standalone), já que o script bash requer dependências do sistema.
 
 Ambas as versões realizam testes de conectividade (ping) e podem opcionalmente executar um traceroute (mtr) para diagnóstico de rede, gerando relatórios com data/hora.
+
+Cada teste de ICMP Ping é realizado continuamente por 59 segundos. O objetivo é capturar oscilações no link ou variações de latência. Se você precisa de relatórios de alta precisão, recomenda-se testar a cada minuto.
+
+Você deve criar o diretório `/var/log/goteira` antes de executar o script e garantir que ele tenha permissões de escrita.
+
+Originalmente, esse software se chamava "sergioreis.sh" em homenagem ao cantor e compositor brasileiro Sérgio Reis e sua música "Pinga Ni Mim", de 1985. Ao lançar o código fonte publicamente, por não ter autorização do artista para usar o nome dele, optei por rebatizá-lo de goteira, que significa em inglês "drip" ou "a leak in the ceiling". 
 
 ---
 
@@ -34,7 +40,7 @@ sudo apt install iputils-ping mtr-tiny coreutils
     ```
 3.  (Opcional) Mova para um diretório no seu PATH para executar de qualquer lugar:
     ```bash
-    sudo mv goteira.sh /usr/local/bin/goteira
+    sudo mv goteira.sh /opt/goteira/goteira.sh
     ```
 
 ### Uso
@@ -42,7 +48,7 @@ sudo apt install iputils-ping mtr-tiny coreutils
 A sintaxe básica é:
 
 ```bash
-./goteira.sh [-m] <ALVO>
+/opt/goteira/goteira.sh [-m] <ALVO>
 ```
 
 - **`<ALVO>`**: O endereço IP ou hostname que você deseja testar (ex: `8.8.8.8`, `google.com`).
@@ -105,7 +111,7 @@ cargo run --release -- [OPÇÕES] <ALVO>
 
 - **`<ALVO>`**: O endereço IP ou hostname (Obrigatório).
 - **`--sysping`**: Usa o comando `ping` do sistema em vez da implementação interna em Rust.
-- **`--sysmtr`**: Usa o comando `mtr` do sistema para o traceroute.
+- **`--sysmtr`**: Usa o comando `mtr` do sistema para o traceroute. As dependências devem estar instaladas e são os mesmos pacotes requeridos pela versão shell script.
 - **`--selftraceroute`**: Usa a implementação interna de traceroute em Rust.
 - **`-h`, `--help`**: Exibe a ajuda.
 
@@ -150,7 +156,7 @@ Para rodar o script a cada 5 minutos, coletando mtr e salvando o log geral em um
     ```
 2.  Adicione a linha (ajuste os caminhos conforme sua instalação):
     ```cron
-    */5 * * * * /usr/local/bin/goteira.sh -m 8.8.8.8 >> /var/log/goteira/goteira.log 2>&1
+    */5 * * * * /opt/goteira.sh -m 8.8.8.8 >> /var/log/goteira/goteira.log 2>&1
     ```
 
 Isso irá:
@@ -158,4 +164,59 @@ Isso irá:
 - Realizar o ping e o traceroute (`-m`).
 - Salvar a saída padrão (ping stats) em `/var/log/goteira/goteira.log`.
 - Os relatórios detalhados do MTR continuarão sendo salvos na estrutura de diretórios de data/hora.
+
+
+## 4. Exemplo de Saída
+
+```
+ayubio@baostar:~/software/goteira$ while true; do ./goteira.sh 8.8.8.8; sleep 60; done
+[14/02/26-18:24]	0.0%	3.1/6.2/83.5/3.2	8.8.8.8
+[14/02/26-18:26]	0.0%	3.1/5.7/28.6/1.5	8.8.8.8
+[14/02/26-18:28]	0.0%	3.1/7.3/228.3/9.2	8.8.8.8
+[14/02/26-18:30]	0.0%	3.1/6.8/201.6/8.1	8.8.8.8
+```
+
+A primeira coluna é o carimbo de data/hora, a segunda coluna é a porcentagem de perda de pacotes (loss%), a terceira coluna min/média/máx/jitter (como `ping -q` mostraria), e a última coluna é o endereço IP alvo para facilitar o uso do `grep`.
+
+---
+
+## 5. Instalação (Snap)
+
+O Goteira está disponível como pacote Snap em duas versões:
+
+1.  **goteira-shell**: A versão em shell script.
+2.  **goteira-rust**: A versão em Rust.
+
+### Instalar via Snap Store
+
+Você pode instalar qualquer uma das versões diretamente da loja oficial:
+
+**Instalar Versão Shell:**
+```bash
+sudo snap install goteira-shell
+```
+
+**Instalar Versão Rust:**
+```bash
+sudo snap install goteira-rust
+```
+
+### Permissões Necessárias
+
+Como os Snaps rodam em um ambiente restrito, você deve conectar manualmente a interface `network-observe` para permitir que a ferramenta realize diagnósticos de rede (necessário para o `mtr` e pings de baixo nível):
+
+```bash
+sudo snap connect goteira-shell:network-observe
+# ou
+sudo snap connect goteira-rust:network-observe
+```
+
+### Logs e Relatórios (Snap)
+
+Quando instalado via Snap, o software não tem permissão para escrever em `/var/log/goteira`. Em vez disso, ele utiliza o diretório padrão de escrita do Snap:
+
+- **Caminho dos Relatórios**: `/var/snap/goteira-[rust|shell]/common/ANO/MES/DIA/...`
+- **Variável**: O software detecta automaticamente a variável de ambiente `$SNAP_COMMON` para determinar este caminho.
+
+Para instalações manuais, o caminho permanece sendo `/var/log/goteira`.
 

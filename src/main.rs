@@ -38,9 +38,13 @@ async fn main() -> Result<()> {
     let now = Local::now();
     let timestamp_str = now.format("%d/%m/%y-%H:%M").to_string();
     
+    // Determine Report Root Path
+    let report_root = std::env::var("SNAP_COMMON").unwrap_or_else(|_| "/var/log/goteira".to_string());
+    let report_root_cleanup = report_root.clone();
+
     // Cleanup old logs in background
     tokio::spawn(async move {
-        if let Err(e) = clean_old_logs("/var/log/goteira").await {
+        if let Err(e) = clean_old_logs(&report_root_cleanup).await {
             eprintln!("Failed to clean logs: {}", e);
         }
     });
@@ -84,8 +88,9 @@ async fn main() -> Result<()> {
         match traceroute_result_res {
             Ok(report) => {
                 // Determine Report Path
-                // /var/log/goteira/YYYY/MM/DD/HH/MM/target.txt
-                let report_dir = format!("/var/log/goteira/{}/{}/{}/{}/{}",
+                // {REPORT_ROOT}/YYYY/MM/DD/HH/MM/target.txt
+                let report_dir = format!("{}/{}/{}/{}/{}/{}",
+                    report_root,
                     now.format("%Y"), now.format("%m"), now.format("%d"), now.format("%H"), now.format("%M"));
                 
                 let report_path = Path::new(&report_dir).join(format!("{}.txt", args.target));

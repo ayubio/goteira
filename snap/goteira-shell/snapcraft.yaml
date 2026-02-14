@@ -1,0 +1,32 @@
+name: goteira-shell
+base: core22
+version: '0.3'
+summary: Shell script version of Goteira connectivity tester
+description: |
+  Goteira is a tool to test network connectivity using ping and optionally mtr (traceroute).
+  This is the shell script version, rewritten from the original pinganimim.sh.
+
+grade: stable
+confinement: strict
+
+parts:
+  scripts:
+    plugin: dump
+    source: ../../
+    organize:
+      goteira.sh: bin/goteira.sh
+    stage-packages:
+      - iputils-ping
+      - mtr-tiny
+      - coreutils
+      - grep
+      - sed
+      - gawk
+
+apps:
+  goteira-shell:
+    command: bin/goteira.sh
+    plugs:
+      - network
+      - network-bind
+      - network-observe

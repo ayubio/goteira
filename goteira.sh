@@ -3,7 +3,7 @@
 # - "Nessa casa tem goteira! Pinga ni mim! Pinga nimim! Pinga nimim!"
 #
 # Usage: ./goteira.sh [-m] alvo
-# Results are shown in stdout and traceroute (mtr) is saved at /var/log/goteira. Use >> to redirect output to a file.
+# Results are shown in stdout and traceroute (mtr) is saved at the report root path (default /var/log/goteira or $SNAP_COMMON). Use >> to redirect output to a file.
 # Example to use in crontab:
 # */5 * * * * /opt/goteira.sh -m 8.8.8.8 >> /var/log/goteira/goteira.log
 #
@@ -41,7 +41,13 @@ month=$(date +%m)
 year=$(date +%Y)
 hour=$(date +%H)
 minute=$(date +%M)
-reportrootpath="/var/log/goteira"
+# Determine report root path (Dynamic for Snap support)
+if [ -n "${SNAP_COMMON:-}" ]; then
+    reportrootpath="$SNAP_COMMON"
+else
+    reportrootpath="/var/log/goteira"
+fi
+
 thisreportpath=$reportrootpath/$year/$month/$day/$hour/$minute
 thisreportfullpath="$thisreportpath/$target.txt"
 temp1=$(mktemp)
