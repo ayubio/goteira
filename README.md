@@ -214,4 +214,9 @@ When installed via Snap, the software does not have permission to write to `/var
 - **Variable**: The software automatically detects the `$SNAP_COMMON` environment variable to determine this path.
 
 For manual installations, the path remains `/var/log/goteira`.
-      
+
+---
+
+## 6. License
+
+This project is licensed under the **GNU General Public License v3.0 or later**. See the [LICENSE](LICENSE) file for details.

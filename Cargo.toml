@@ -2,6 +2,8 @@
 name = "goteira"
 version = "0.1.0"
 edition = "2021"
+license = "GPL-3.0-or-later"
+authors = ["Ayub <dev@ayub.net.br>"]
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }

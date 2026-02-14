@@ -220,3 +220,9 @@ Quando instalado via Snap, o software não tem permissão para escrever em `/var
 
 Para instalações manuais, o caminho permanece sendo `/var/log/goteira`.
 
+---
+
+## 6. Licença
+
+Este projeto está licenciado sob a **GNU General Public License v3.0 ou posterior**. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+
