@@ -1,0 +1,15 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# System & Editor
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+
+# Logs & Data
+*.log
+*.txt
+/var/log/goteira/
