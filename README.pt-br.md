@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="assets/logo.gif" alt="Goteira Logo" width="200">
+</div>
+
 # Manual do Goteira
 
 Este documento fornece instruções completas para instalação e uso das duas versões do software: **Shell Script** (`goteira.sh`) e **Rust** (`goteira`). O Gemmini foi responsável pela versão em Rust derivada do script Bash original. O objetivo é fornecer uma versão independente (standalone), já que o script bash requer dependências do sistema.

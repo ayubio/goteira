@@ -12,4 +12,5 @@
 # Logs & Data
 *.log
 *.txt
+*.snap
 /var/log/goteira/
