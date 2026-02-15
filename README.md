@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/logo.gif" alt="Goteira Logo" width="200">
+  <img src="https://github.com/user-attachments/assets/90b0864e-f528-401e-a165-f039b7d2ae78" alt="Goteira Logo" width="200">
 </div>
 
 # Goteira Manual
