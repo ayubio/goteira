@@ -17,12 +17,12 @@
 use tokio::process::Command;
 use regex::Regex;
 use anyhow::{Result, anyhow};
-use surge_ping::{Client, Config, IcmpPacket, PingIdentifier, PingSequence};
+use surge_ping::{Client, Config, PingIdentifier, PingSequence};
 use tokio::time::{self, Duration};
 
 use std::net::IpAddr;
 use std::str::FromStr;
-use rand::random;
+// rand::random is unused
 
 #[derive(Debug)]
 pub struct PingResult {
@@ -99,7 +99,7 @@ pub async fn run_self_ping(target: &str) -> Result<PingResult> {
     let mut pinger = client.pinger(ip, PingIdentifier(rand::random::<u16>())).await;
 
     let mut rtts = Vec::new();
-    let count = 59; // Approx 59 pings to match 59s duration if 1/sec, or adaptive.
+    let _count = 59; // Approx 59 pings to match 59s duration if 1/sec, or adaptive.
     // The original script uses -A (adaptive), so it floods.
     // We will stick to a reasonable interval, e.g., 200ms = 5 pings/sec * 12 sec = 60 pings?
     // Or just 1 ping per second for 59 seconds?

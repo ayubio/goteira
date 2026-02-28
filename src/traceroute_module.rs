@@ -21,7 +21,7 @@ use std::str::FromStr;
 use std::time::{Duration, Instant};
 use socket2::{Socket, Domain, Type, Protocol};
 use std::mem::MaybeUninit;
-use std::io::Read;
+// std::io::Read is unused
 
 pub async fn run_sys_mtr(target: &str) -> Result<String> {
     // mtr --report --report-wide --aslookup --report-cycles 30 target
@@ -109,7 +109,7 @@ pub async fn run_self_traceroute(target: &str) -> Result<String> {
             // Recv
             let mut buf = [MaybeUninit::new(0u8); 128];
             match socket.recv_from(&mut buf) {
-                Ok((size, addr)) => {
+                Ok((_size, addr)) => {
                     let duration = start.elapsed();
                     rtts.push(duration.as_secs_f64() * 1000.0);
                     recv_count += 1;
