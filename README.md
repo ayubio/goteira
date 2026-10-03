@@ -214,7 +214,7 @@ sudo snap install goteira
 sudo snap connect goteira:network-observe
 ```
 
-> The former `goteira-shell` and `goteira-rust` snaps are superseded by `goteira`.
+> The former `goteira-rust` snap is superseded by `goteira`. To migrate: `sudo snap remove goteira-rust && sudo snap install goteira`. Old reports stay in `/var/snap/goteira-rust/common` (the new snap uses `/var/snap/goteira/common`).
 
 ### Logs and Reports (Snap)
 
