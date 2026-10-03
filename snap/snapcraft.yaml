@@ -21,6 +21,10 @@ parts:
     plugin: rust
     source: .
     rust-channel: stable
+    override-build: |
+      # source: . also copies the host's target/ dir; build from scratch
+      rm -rf target
+      craftctl default
     stage-packages:
       - iputils-ping
       - mtr-tiny

@@ -80,6 +80,27 @@ The basic syntax is:
 
 The modern version rewritten in Rust, featuring better performance and structure.
 
+### Pre-built binary (recommended)
+
+Static binaries (no Rust toolchain needed) for `x86_64` and `aarch64` are attached to each [GitHub Release](https://github.com/ayubio/goteira/releases), with a `.sha256` checksum:
+
+```bash
+VER=v0.4.0; ARCH=$(uname -m)   # x86_64 or aarch64
+curl -LO https://github.com/ayubio/goteira/releases/download/$VER/goteira-$VER-linux-$ARCH.tar.gz
+curl -LO https://github.com/ayubio/goteira/releases/download/$VER/goteira-$VER-linux-$ARCH.tar.gz.sha256
+sha256sum -c goteira-$VER-linux-$ARCH.tar.gz.sha256
+tar xzf goteira-$VER-linux-$ARCH.tar.gz
+sudo install -m 755 goteira-$VER-linux-$ARCH/goteira /opt/goteira/goteira
+```
+
+The default mode only needs the system `ping` (`iputils-ping`), plus `mtr` if you use `-m`.
+
+**Privileges for the experimental internal features** (not needed by default):
+- `--selfping` uses unprivileged ICMP sockets: your group must be inside `net.ipv4.ping_group_range` (`cat /proc/sys/net/ipv4/ping_group_range`; most distros already allow all groups).
+- `--selftraceroute` uses raw sockets and needs `CAP_NET_RAW`: `sudo setcap cap_net_raw+ep /opt/goteira/goteira`.
+
+### Building from source
+
 ### Prerequisites
 
 To compile and run this version, you need the Rust development environment installed.
