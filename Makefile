@@ -1,18 +1,21 @@
-# Makefile para goteira monorepo
+# Makefile para goteira
+
+.PHONY: clean build build-shell
 
 clean:
 	snapcraft clean
 
-build-rust:
-	@echo "Preparando build da versão RUST..."
-	@cp snap/local/goteira-rust/snapcraft.yaml snap/snapcraft.yaml
+# Snap oficial (Rust), definido em snap/snapcraft.yaml
+build:
 	snapcraft pack
-	@mv *.snap goteira-rust.snap 2>/dev/null || true
-	@echo "Build Rust concluído."
+	@mv *.snap goteira.snap 2>/dev/null || true
 
+# Snap legado (shell, deprecated): montado em diretório temporário para não
+# sobrescrever snap/snapcraft.yaml
 build-shell:
-	@echo "Preparando build da versão SHELL..."
-	@cp snap/local/goteira-shell/snapcraft.yaml snap/snapcraft.yaml
-	snapcraft pack
-	@mv *.snap goteira-shell.snap 2>/dev/null || true
-	@echo "Build Shell concluído."
+	@tmp=$$(mktemp -d) && \
+	mkdir -p $$tmp/snap && \
+	cp goteira.sh $$tmp/ && \
+	cp snap/local/goteira-shell/snapcraft.yaml $$tmp/snap/snapcraft.yaml && \
+	(cd $$tmp && snapcraft pack) && \
+	mv $$tmp/*.snap ./goteira-shell.snap && rm -rf $$tmp

@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use tokio::process::Command;
+use anyhow::{anyhow, Result};
 use regex::Regex;
-use anyhow::{Result, anyhow};
 use surge_ping::{Client, Config, PingIdentifier, PingSequence};
+use tokio::process::Command;
 use tokio::time::{self, Duration};
 
 use std::net::IpAddr;
@@ -33,31 +33,57 @@ pub struct PingResult {
     pub mdev: f64,
 }
 
+impl PingResult {
+    /// Result reported when no reply was received (or ping could not run).
+    pub fn lost() -> Self {
+        PingResult {
+            loss: 100.0,
+            min: 0.0,
+            avg: 0.0,
+            max: 0.0,
+            mdev: 0.0,
+        }
+    }
+}
+
 pub async fn run_sys_ping(target: &str) -> Result<PingResult> {
     // ping -qnAw 59 target
     // -q: quiet
     // -n: numeric output
     // -A: adaptive
     // -w 59: deadline 59 seconds
+    // LC_ALL=C avoids locale-dependent output breaking the parser.
     let output = Command::new("ping")
-        .args(&["-qnAw", "59", target])
-        .output().await?;
-    
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    
-    // Parse loss
-    // Example: "100 packets transmitted, 100 received, 0% packet loss, time 1999ms"
-    // Extract "0" from "0% packet loss"
-    let re_loss = Regex::new(r"(\d+)% packet loss").unwrap();
-    let loss_cap = re_loss.captures(&stdout).ok_or(anyhow!("Could not parse packet loss"))?;
-    let loss = loss_cap[1].parse::<f64>()?;
+        .env("LC_ALL", "C")
+        .args(["-qnAw", "59", target])
+        .output()
+        .await?;
 
-    // Parse RTT
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_ping_output(&stdout).map_err(|e| {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        match stderr.trim() {
+            "" => e,
+            msg => anyhow!("{} ({})", e, msg),
+        }
+    })
+}
+
+/// Parses the summary printed by iputils `ping -q`.
+fn parse_ping_output(stdout: &str) -> Result<PingResult> {
+    // Example: "100 packets transmitted, 100 received, 0% packet loss, time 1999ms"
+    // Loss may be fractional on newer iputils: "1.5% packet loss"
+    let re_loss = Regex::new(r"([\d.]+)% packet loss").unwrap();
+    let loss = re_loss
+        .captures(stdout)
+        .ok_or_else(|| anyhow!("Could not parse packet loss"))?[1]
+        .parse::<f64>()?;
+
     // Example: "rtt min/avg/max/mdev = 1.000/2.000/3.000/0.500 ms"
-    let re_rtt = Regex::new(r"rtt min/avg/max/mdev = ([\d\.]+)/([\d\.]+)/([\d\.]+)/([\d\.]+) ms").unwrap();
-    
-    // Sometimes ping output might not have RTT stats if all packets are lost
-    if let Some(rtt_cap) = re_rtt.captures(&stdout) {
+    let re_rtt =
+        Regex::new(r"rtt min/avg/max/mdev = ([\d.]+)/([\d.]+)/([\d.]+)/([\d.]+) ms").unwrap();
+
+    if let Some(rtt_cap) = re_rtt.captures(stdout) {
         Ok(PingResult {
             loss,
             min: rtt_cap[1].parse()?,
@@ -65,19 +91,11 @@ pub async fn run_sys_ping(target: &str) -> Result<PingResult> {
             max: rtt_cap[3].parse()?,
             mdev: rtt_cap[4].parse()?,
         })
+    } else if loss == 100.0 {
+        // No RTT line when every packet is lost
+        Ok(PingResult::lost())
     } else {
-        // Handle 100% loss case or unexpected output
-        if loss == 100.0 {
-             Ok(PingResult {
-                loss,
-                min: 0.0,
-                avg: 0.0,
-                max: 0.0,
-                mdev: 0.0,
-            })
-        } else {
-            Err(anyhow!("Could not parse RTT statistics"))
-        }
+        Err(anyhow!("Could not parse RTT statistics"))
     }
 }
 
@@ -88,7 +106,10 @@ pub async fn run_self_ping(target: &str) -> Result<PingResult> {
         Err(_) => {
             // Simple DNS lookup using std::net::ToSocketAddrs (blocking, but okay for now or use tokio defaults)
             // Or assume input is hostname and resolve it
-             match tokio::net::lookup_host(format!("{}:0", target)).await?.next() {
+            match tokio::net::lookup_host(format!("{}:0", target))
+                .await?
+                .next()
+            {
                 Some(socket_addr) => socket_addr.ip(),
                 None => return Err(anyhow!("Could not resolve host")),
             }
@@ -96,21 +117,23 @@ pub async fn run_self_ping(target: &str) -> Result<PingResult> {
     };
 
     let client = Client::new(&Config::default())?;
-    let mut pinger = client.pinger(ip, PingIdentifier(rand::random::<u16>())).await;
+    let mut pinger = client
+        .pinger(ip, PingIdentifier(rand::random::<u16>()))
+        .await;
 
     let mut rtts = Vec::new();
     let _count = 59; // Approx 59 pings to match 59s duration if 1/sec, or adaptive.
-    // The original script uses -A (adaptive), so it floods.
-    // We will stick to a reasonable interval, e.g., 200ms = 5 pings/sec * 12 sec = 60 pings?
-    // Or just 1 ping per second for 59 seconds?
-    // The user said: "gerador e interpretador do ICMP Ping seja o próprio código fonte Rust"
-    // Let's do 60 pings with 200ms interval (approx 12s total?) or spread over 59s?
-    // The command `ping -w 59` runs for 59 seconds. `ping -A` sends packets as soon as reply is received.
-    // Implementing adaptive ping is complex. Let's do a fast ping: 100ms interval for 60 seconds? That's too many.
-    // Let's do 1 ping per second for 59 seconds to match the deadline duration roughly, OR
-    // match the packet count. The script doesn't set count, just deadline.
-    // Let's aim for 60 samples.
-    
+                     // The original script uses -A (adaptive), so it floods.
+                     // We will stick to a reasonable interval, e.g., 200ms = 5 pings/sec * 12 sec = 60 pings?
+                     // Or just 1 ping per second for 59 seconds?
+                     // The user said: "gerador e interpretador do ICMP Ping seja o próprio código fonte Rust"
+                     // Let's do 60 pings with 200ms interval (approx 12s total?) or spread over 59s?
+                     // The command `ping -w 59` runs for 59 seconds. `ping -A` sends packets as soon as reply is received.
+                     // Implementing adaptive ping is complex. Let's do a fast ping: 100ms interval for 60 seconds? That's too many.
+                     // Let's do 1 ping per second for 59 seconds to match the deadline duration roughly, OR
+                     // match the packet count. The script doesn't set count, just deadline.
+                     // Let's aim for 60 samples.
+
     let interval = Duration::from_millis(500); // 2 pings/sec
     let duration = Duration::from_secs(59);
     let start = time::Instant::now();
@@ -142,9 +165,9 @@ pub async fn run_self_ping(target: &str) -> Result<PingResult> {
     }
 
     let loss = ((sent - received) as f64 / sent as f64) * 100.0;
-    
+
     if rtts.is_empty() {
-         return Ok(PingResult {
+        return Ok(PingResult {
             loss,
             min: 0.0,
             avg: 0.0,
@@ -157,7 +180,7 @@ pub async fn run_self_ping(target: &str) -> Result<PingResult> {
     let max = rtts.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
     let sum: f64 = rtts.iter().sum();
     let avg = sum / rtts.len() as f64;
-    
+
     // mdev = sqrt(sum((x - avg)^2) / N)
     let variance_sum: f64 = rtts.iter().map(|x| (x - avg).powi(2)).sum();
     let mdev = (variance_sum / rtts.len() as f64).sqrt();
@@ -173,3 +196,39 @@ pub async fn run_self_ping(target: &str) -> Result<PingResult> {
 
 // Helper payload
 const PAYLOAD: [u8; 56] = [0; 56];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const OK: &str = "--- 8.8.8.8 ping statistics ---\n\
+        1000 packets transmitted, 1000 received, 0% packet loss, time 59001ms\n\
+        rtt min/avg/max/mdev = 3.120/6.201/83.512/3.244 ms, ipg/ewma 59.001/5.900 ms\n";
+
+    #[test]
+    fn parses_success() {
+        let r = parse_ping_output(OK).unwrap();
+        assert_eq!(r.loss, 0.0);
+        assert_eq!((r.min, r.avg, r.max, r.mdev), (3.120, 6.201, 83.512, 3.244));
+    }
+
+    #[test]
+    fn parses_fractional_loss() {
+        let out = OK.replace("0% packet loss", "1.5% packet loss");
+        assert_eq!(parse_ping_output(&out).unwrap().loss, 1.5);
+    }
+
+    #[test]
+    fn parses_total_loss_without_rtt() {
+        let out = "5 packets transmitted, 0 received, 100% packet loss, time 4090ms\n";
+        let r = parse_ping_output(out).unwrap();
+        assert_eq!((r.loss, r.avg), (100.0, 0.0));
+    }
+
+    #[test]
+    fn rejects_unparseable_output() {
+        assert!(parse_ping_output("").is_err());
+        let partial = "10 packets transmitted, 9 received, 10% packet loss, time 9ms\n";
+        assert!(parse_ping_output(partial).is_err());
+    }
+}

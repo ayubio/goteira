@@ -16,7 +16,9 @@ Originally, this software was named "sergioreis.sh" in honor of the Brazilian si
 
 ---
 
-## 1. Shell Script Version (`goteira.sh`)
+## 1. Shell Script Version (`goteira.sh`) — DEPRECATED
+
+> **Deprecated.** The Rust version is now the only maintained one and is a drop-in replacement: same command line (`-m`), same TAB-separated output. The shell script will be removed in 1.0.0.
 
 The original Bash version, lightweight and with common Linux system dependencies.
 
@@ -114,27 +116,28 @@ cargo run --release -- [OPTIONS] <TARGET>
 #### Available Options
 
 - **`<TARGET>`**: The IP address or hostname (Required).
-- **`--sysping`**: Uses the system's `ping` command instead of the internal Rust implementation.
-- **`--sysmtr`**: Uses the system's `mtr` command for traceroute. Dependencies must be installed and are the same packages required by the bash script version.
-- **`--selftraceroute`**: Uses the internal Rust traceroute implementation.
+- **`-m`, `--mtr`** (alias `--sysmtr`): Also runs the system's `mtr` in parallel with ping and saves its report. Requires `mtr` installed.
+- **`--selfping`**: *(experimental)* Uses the internal Rust ping instead of the system `ping`.
+- **`--selftraceroute`**: *(experimental)* Uses the internal Rust traceroute (needs `CAP_NET_RAW`).
 - **`-h`, `--help`**: Displays help information.
 
-**Note:** If no traceroute option (`--sysmtr` or `--selftraceroute`) is provided, only ping will be executed.
+**Note:** The system `ping` (iputils) is required and is the default. If no traceroute option (`-m` or `--selftraceroute`) is provided, only ping will be executed.
+
+**Exit code:** `0` on success; `1` when ping fails or all packets are lost (the output line is still printed, as `100.0%`, so logs have no gaps; the cause goes to stderr).
 
 #### Examples
 
-**Ping Only (Internal Implementation):**
+**Ping only:**
 ```bash
 ./target/release/goteira 8.8.8.8
 ```
 
-**Ping (System) + MTR (System):**
+**Ping + MTR (same as `goteira.sh -m`):**
 ```bash
-./target/release/goteira --sysping --sysmtr 8.8.8.8
+./target/release/goteira -m 8.8.8.8
 ```
-*This reproduces the behavior of the `goteira.sh -m` script.*
 
-**Ping (Internal) + Traceroute (Internal):**
+**Internal traceroute (experimental):**
 ```bash
 ./target/release/goteira --selftraceroute 8.8.8.8
 ```
@@ -160,7 +163,7 @@ To run the script every 5 minutes, collecting mtr and saving the general log to 
     ```
 2.  Add the line (adjust paths according to your installation):
     ```cron
-    */5 * * * * /opt/goteira.sh -m 8.8.8.8 >> /var/log/goteira/goteira.log 2>&1
+    */5 * * * * /opt/goteira/goteira -m 8.8.8.8 >> /var/log/goteira/goteira.log 2>&1
     ```
 
 This will:
@@ -185,37 +188,18 @@ First column is the timestamp, second column is the packet loss percentage (loss
 
 ## 5. Installation (Snap)
 
-Goteira is available as a Snap package in two versions:
-
-1.  **goteira-shell**: The shell script version.
-2.  **goteira-rust**: The Rust version.
-
-### Install from the Snap Store
-
-You can install either version directly from the Snap Store:
-
-**Install Shell Version:**
 ```bash
-sudo snap install goteira-shell
+sudo snap install goteira
+sudo snap connect goteira:network-observe
 ```
 
-**Install Rust Version:**
-```bash
-sudo snap install goteira-rust
-```
-
-```bash
-sudo snap connect goteira-shell:network-observe
-# or
-sudo snap connect goteira-rust:network-observe
-```
+> The former `goteira-shell` and `goteira-rust` snaps are superseded by `goteira`.
 
 ### Logs and Reports (Snap)
 
-When installed via Snap, the software does not have permission to write to `/var/log/goteira`. Instead, it uses the standard Snap writable directory:
+When installed via Snap, reports are written to the standard Snap writable directory, detected through `$SNAP_COMMON`:
 
-- **Reports Path**: `/var/snap/goteira-[rust|shell]/common/YEAR/MONTH/DAY/...`
-- **Variable**: The software automatically detects the `$SNAP_COMMON` environment variable to determine this path.
+- **Reports Path**: `/var/snap/goteira/common/YEAR/MONTH/DAY/...`
 
 For manual installations, the path remains `/var/log/goteira`.
 

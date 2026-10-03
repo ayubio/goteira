@@ -12,13 +12,17 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 mod ping_module;
 mod traceroute_module;
 
+use anyhow::{Context, Result};
+use chrono::Local;
 use clap::Parser;
-use ping_module::{run_self_ping, run_sys_ping};
+use ping_module::{run_self_ping, run_sys_ping, PingResult};
+use std::fs;
+use std::path::Path;
+use tokio::process::Command;
 use traceroute_module::{run_self_traceroute, run_sys_mtr};
 
 #[derive(Parser, Debug)]
@@ -28,23 +32,31 @@ struct Args {
     #[arg(index = 1)]
     target: String,
 
-    /// Use system ping (/bin/ping) instead of internal implementation
-    #[arg(long)]
-    sysping: bool,
+    /// Also run mtr (system binary) in parallel and save its report
+    #[arg(short = 'm', long = "mtr", visible_alias = "sysmtr")]
+    mtr: bool,
 
-    /// Use system mtr (/usr/sbin/mtr)
-    #[arg(long)]
-    sysmtr: bool,
-
-    /// Use internal traceroute implementation
-    #[arg(long)]
+    /// [experimental] Use the internal traceroute implementation (needs CAP_NET_RAW)
+    #[arg(long, conflicts_with = "mtr")]
     selftraceroute: bool,
+
+    /// [experimental] Use the internal ping implementation instead of system ping
+    #[arg(long)]
+    selfping: bool,
+
+    /// Deprecated: system ping is now the default
+    #[arg(long, hide = true)]
+    sysping: bool,
 }
 
-use anyhow::{Context, Result};
-use chrono::Local;
-use std::fs;
-use std::path::Path;
+/// Formats the stdout line consumed by legacy parsers (fields separated by TAB):
+/// [DD/MM/YY-HH:MM] LOSS% MIN/AVG/MAX/MDEV TARGET
+fn format_ping_line(timestamp: &str, r: &PingResult, target: &str) -> String {
+    format!(
+        "[{}]\t{:.1}%\t{:.1}/{:.1}/{:.1}/{:.1}\t{}",
+        timestamp, r.loss, r.min, r.avg, r.max, r.mdev, target
+    )
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -60,7 +72,7 @@ async fn main() -> Result<()> {
     let report_root_cleanup = report_root.clone();
 
     // Cleanup old logs in background
-    tokio::spawn(async move {
+    let cleanup_handle = tokio::spawn(async move {
         if let Err(e) = clean_old_logs(&report_root_cleanup).await {
             eprintln!("Failed to clean logs: {}", e);
         }
@@ -69,47 +81,48 @@ async fn main() -> Result<()> {
     // Run Ping and Traceroute concurrently
     let target = args.target.clone();
     let target_clone = target.clone();
+    let selfping = args.selfping;
 
     let ping_handle = tokio::spawn(async move {
-        if args.sysping {
-            run_sys_ping(&target).await
-        } else {
+        if selfping {
             run_self_ping(&target).await
+        } else {
+            run_sys_ping(&target).await
         }
     });
 
+    let (mtr, selftraceroute) = (args.mtr, args.selftraceroute);
     let traceroute_handle = tokio::spawn(async move {
-        if args.sysmtr {
+        if mtr {
             Some(run_sys_mtr(&target_clone).await)
-        } else if args.selftraceroute {
+        } else if selftraceroute {
             Some(run_self_traceroute(&target_clone).await)
         } else {
             None
         }
     });
 
-    // Wait for Ping
-    let ping_result = ping_handle.await??;
+    // Wait for Ping. A failure must never leave a gap in the log: print a
+    // 100% loss line, report the cause on stderr and exit non-zero.
+    let ping_result = match ping_handle.await? {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Ping failed: {:#}", e);
+            PingResult::lost()
+        }
+    };
+    let ping_failed = ping_result.loss >= 100.0;
 
-    // Format Ping Output
-    // [TIMESTAMP] LOSS% MIN/AVG/MAX/MDEV TARGET
-    let loss_rounded = (ping_result.loss * 10.0).ceil() / 10.0;
     println!(
-        "[{}] {:.1}% {:.1}/{:.1}/{:.1}/{:.1} {}",
-        timestamp_str,
-        loss_rounded,
-        ping_result.min,
-        ping_result.avg,
-        ping_result.max,
-        ping_result.mdev,
-        args.target
+        "{}",
+        format_ping_line(&timestamp_str, &ping_result, &args.target)
     );
 
-    // Wait for Traceroute and Write Report
+    // Wait for Traceroute and Write Report (also when ping failed: that is
+    // exactly when the route report is most useful)
     if let Some(traceroute_result_res) = traceroute_handle.await? {
         match traceroute_result_res {
             Ok(report) => {
-                // Determine Report Path
                 // {REPORT_ROOT}/YYYY/MM/DD/HH/MM/target.txt
                 let report_dir = format!(
                     "{}/{}/{}/{}/{}/{}",
@@ -125,29 +138,59 @@ async fn main() -> Result<()> {
 
                 if let Err(e) = fs::create_dir_all(&report_dir) {
                     eprintln!("Failed to create report directory: {}", e);
-                } else {
-                    if let Err(e) = fs::write(&report_path, report) {
-                        eprintln!("Failed to write report to {:?}: {}", report_path, e);
-                    }
+                } else if let Err(e) = fs::write(&report_path, report) {
+                    eprintln!("Failed to write report to {:?}: {}", report_path, e);
                 }
             }
-            Err(e) => eprintln!("Traceroute failed: {}", e),
+            Err(e) => eprintln!("Traceroute failed: {:#}", e),
         }
     }
 
+    let _ = cleanup_handle.await;
+
+    // Exit code: 0 = ok, 1 = ping failed/100% loss
+    if ping_failed {
+        std::process::exit(1);
+    }
     Ok(())
 }
-
-use tokio::process::Command;
 
 async fn clean_old_logs(root: &str) -> Result<()> {
     // find root -type f -mtime +30 -delete
     Command::new("find")
-        .args(&[root, "-type", "f", "-mtime", "+30", "-delete"])
+        .args([root, "-type", "f", "-mtime", "+30", "-delete"])
         .stderr(std::process::Stdio::null())
         .spawn()
         .context("Failed to spawn find command")?
         .wait()
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn output_line_is_tab_separated() {
+        let r = PingResult {
+            loss: 0.0,
+            min: 3.12,
+            avg: 6.2,
+            max: 83.5,
+            mdev: 3.24,
+        };
+        assert_eq!(
+            format_ping_line("14/02/26-18:24", &r, "8.8.8.8"),
+            "[14/02/26-18:24]\t0.0%\t3.1/6.2/83.5/3.2\t8.8.8.8"
+        );
+    }
+
+    #[test]
+    fn lost_result_formats_like_shell_fallback() {
+        assert_eq!(
+            format_ping_line("01/01/26-00:00", &PingResult::lost(), "x"),
+            "[01/01/26-00:00]\t100.0%\t0.0/0.0/0.0/0.0\tx"
+        );
+    }
 }

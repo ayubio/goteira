@@ -16,7 +16,9 @@ Originalmente, esse software se chamava "sergioreis.sh" em homenagem ao cantor e
 
 ---
 
-## 1. Versão Shell Script (`goteira.sh`)
+## 1. Versão Shell Script (`goteira.sh`) — DEPRECADA
+
+> **Deprecada.** A versão Rust é a única mantida e substitui o script sem mudanças: mesma linha de comando (`-m`) e mesma saída separada por TAB. O shell script será removido na versão 1.0.0.
 
 A versão original em Bash, leve e com dependências comuns de sistemas Linux.
 
@@ -114,27 +116,29 @@ cargo run --release -- [OPÇÕES] <ALVO>
 #### Opções Disponíveis
 
 - **`<ALVO>`**: O endereço IP ou hostname (Obrigatório).
-- **`--sysping`**: Usa o comando `ping` do sistema em vez da implementação interna em Rust.
-- **`--sysmtr`**: Usa o comando `mtr` do sistema para o traceroute. As dependências devem estar instaladas e são os mesmos pacotes requeridos pela versão shell script.
-- **`--selftraceroute`**: Usa a implementação interna de traceroute em Rust.
+- **`-m`, `--mtr`** (alias `--sysmtr`): Executa também o `mtr` do sistema em paralelo ao ping e salva o relatório. Requer o `mtr` instalado.
+- **`--selfping`**: *(experimental)* Usa o ping interno em Rust em vez do `ping` do sistema.
+- **`--selftraceroute`**: *(experimental)* Usa o traceroute interno em Rust (requer `CAP_NET_RAW`).
 - **`-h`, `--help`**: Exibe a ajuda.
 
-**Nota:** Se nenhuma opção de traceroute (`--sysmtr` ou `--selftraceroute`) for fornecida, apenas o ping será executado.
+**Nota:** O `ping` do sistema (iputils) é obrigatório e é o padrão. Se nenhuma opção de traceroute (`-m` ou `--selftraceroute`) for fornecida, apenas o ping será executado.
+
+**Código de saída:** `0` em sucesso; `1` quando o ping falha ou todos os pacotes são perdidos (a linha de saída continua sendo impressa como `100.0%`, sem lacunas no log; a causa vai para o stderr).
 
 #### Exemplos
 
-**Apenas Ping (Implementação Interna):**
+**Apenas Ping:**
 ```bash
 ./target/release/goteira 8.8.8.8
 ```
 
-**Ping (Sistema) + MTR (Sistema):**
+**Ping + MTR (igual a `goteira.sh -m`):**
 ```bash
-./target/release/goteira --sysping --sysmtr 8.8.8.8
+./target/release/goteira -m 8.8.8.8
 ```
 *Isso reproduz o comportamento do script `goteira.sh -m`.*
 
-**Ping (Interno) + Traceroute (Interno):**
+**Traceroute interno (experimental):**
 ```bash
 ./target/release/goteira --selftraceroute 8.8.8.8
 ```
@@ -160,11 +164,11 @@ Para rodar o script a cada 5 minutos, coletando mtr e salvando o log geral em um
     ```
 2.  Adicione a linha (ajuste os caminhos conforme sua instalação):
     ```cron
-    */5 * * * * /opt/goteira.sh -m 8.8.8.8 >> /var/log/goteira/goteira.log 2>&1
+    */5 * * * * /opt/goteira/goteira -m 8.8.8.8 >> /var/log/goteira/goteira.log 2>&1
     ```
 
 Isso irá:
-- Executar o `goteira.sh` a cada 5 minutos.
+- Executar o `goteira` a cada 5 minutos.
 - Realizar o ping e o traceroute (`-m`).
 - Salvar a saída padrão (ping stats) em `/var/log/goteira/goteira.log`.
 - Os relatórios detalhados do MTR continuarão sendo salvos na estrutura de diretórios de data/hora.
@@ -186,41 +190,18 @@ A primeira coluna é o carimbo de data/hora, a segunda coluna é a porcentagem d
 
 ## 5. Instalação (Snap)
 
-O Goteira está disponível como pacote Snap em duas versões:
-
-1.  **goteira-shell**: A versão em shell script.
-2.  **goteira-rust**: A versão em Rust.
-
-### Instalar via Snap Store
-
-Você pode instalar qualquer uma das versões diretamente da loja oficial:
-
-**Instalar Versão Shell:**
 ```bash
-sudo snap install goteira-shell
+sudo snap install goteira
+sudo snap connect goteira:network-observe
 ```
 
-**Instalar Versão Rust:**
-```bash
-sudo snap install goteira-rust
-```
-
-### Permissões Necessárias
-
-Como os Snaps rodam em um ambiente restrito, você deve conectar manualmente a interface `network-observe` para permitir que a ferramenta realize diagnósticos de rede (necessário para o `mtr` e pings de baixo nível):
-
-```bash
-sudo snap connect goteira-shell:network-observe
-# ou
-sudo snap connect goteira-rust:network-observe
-```
+> Os antigos snaps `goteira-shell` e `goteira-rust` foram substituídos pelo `goteira`.
 
 ### Logs e Relatórios (Snap)
 
-Quando instalado via Snap, o software não tem permissão para escrever em `/var/log/goteira`. Em vez disso, ele utiliza o diretório padrão de escrita do Snap:
+Quando instalado via Snap, os relatórios são gravados no diretório de escrita padrão do Snap, detectado pela variável `$SNAP_COMMON`:
 
-- **Caminho dos Relatórios**: `/var/snap/goteira-[rust|shell]/common/ANO/MES/DIA/...`
-- **Variável**: O software detecta automaticamente a variável de ambiente `$SNAP_COMMON` para determinar este caminho.
+- **Caminho dos Relatórios**: `/var/snap/goteira/common/ANO/MES/DIA/...`
 
 Para instalações manuais, o caminho permanece sendo `/var/log/goteira`.
 

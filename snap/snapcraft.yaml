@@ -1,17 +1,17 @@
-name: goteira-rust
+name: goteira
 base: core22
-version: '0.1.0'
+version: '0.4.0'
 license: GPL-3.0
-summary: Rust version of Goteira connectivity tester
+summary: Connectivity tester and network diagnostics tool
 description: |
-  Goteira is a tool to test network connectivity using ping and optionally mtr.
-  This is the high-performance Rust version.
+  Goteira tests network connectivity using ICMP ping (59 seconds per run) and
+  optionally mtr, saving timestamped traceroute reports.
 
-title: Goteira (Rust)
-website: https://github.com/ayubio/goteira 
+title: Goteira
+website: https://github.com/ayubio/goteira
 source-code: https://github.com/ayubio/goteira
 issues: https://github.com/ayubio/goteira/issues
-contact: https://github.com/seu-usuario/goteira/issues
+contact: https://github.com/ayubio/goteira/issues
 
 grade: stable
 confinement: strict
@@ -20,16 +20,13 @@ parts:
   goteira:
     plugin: rust
     source: .
-    rust-channel: stable 
-    build-packages:
-      - pkg-config
-      - libssl-dev
+    rust-channel: stable
     stage-packages:
       - iputils-ping
       - mtr-tiny
 
 apps:
-  goteira-rust:
+  goteira:
     command: bin/goteira
     plugs:
       - network
