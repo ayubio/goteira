@@ -1,0 +1,47 @@
+# Last revision of the legacy "goteira-rust" snap. It is the same code as the
+# "goteira" snap, but the description tells users to migrate.
+name: goteira-rust
+base: core22
+version: '0.4.0'
+license: GPL-3.0
+summary: DEPRECATED - use the 'goteira' snap instead
+description: |
+  DEPRECATED: this snap was renamed to "goteira" and will not receive further
+  updates. Migrate with:
+
+      sudo snap remove goteira-rust
+      sudo snap install goteira
+
+  Old reports remain in /var/snap/goteira-rust/common; the new snap writes to
+  /var/snap/goteira/common.
+
+  More information: https://github.com/ayubio/goteira
+
+title: Goteira (Rust) - deprecated
+website: https://github.com/ayubio/goteira
+source-code: https://github.com/ayubio/goteira
+issues: https://github.com/ayubio/goteira/issues
+contact: https://github.com/ayubio/goteira/issues
+
+grade: stable
+confinement: strict
+
+parts:
+  goteira:
+    plugin: rust
+    source: .
+    rust-channel: stable
+    override-build: |
+      rm -rf target
+      craftctl default
+    stage-packages:
+      - iputils-ping
+      - mtr-tiny
+
+apps:
+  goteira-rust:
+    command: bin/goteira
+    plugs:
+      - network
+      - network-bind
+      - network-observe

@@ -18,6 +18,8 @@ Originally, this software was named "sergioreis.sh" in honor of the Brazilian si
 
 ## 1. Shell Script Version (`goteira.sh`) — DEPRECATED
 
+> See [MIGRATION.md](MIGRATION.md) to move to the Rust version.
+
 > **Deprecated.** The Rust version is now the only maintained one and is a drop-in replacement: same command line (`-m`), same TAB-separated output. The shell script will be removed in 1.0.0.
 
 The original Bash version, lightweight and with common Linux system dependencies.

@@ -18,6 +18,8 @@ Originalmente, esse software se chamava "sergioreis.sh" em homenagem ao cantor e
 
 ## 1. Versão Shell Script (`goteira.sh`) — DEPRECADA
 
+> Veja o [MIGRATION.pt-br.md](MIGRATION.pt-br.md) para migrar para a versão Rust.
+
 > **Deprecada.** A versão Rust é a única mantida e substitui o script sem mudanças: mesma linha de comando (`-m`) e mesma saída separada por TAB. O shell script será removido na versão 1.0.0.
 
 A versão original em Bash, leve e com dependências comuns de sistemas Linux.
