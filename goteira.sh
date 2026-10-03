@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# goteira.sh - v0.3 by dev@ayub.net.br
+# goteira.sh - v0.3.1 (DEPRECATED, use the Rust version) by dev@ayub.net.br
 # - "Nessa casa tem goteira! Pinga ni mim! Pinga nimim! Pinga nimim!"
 #
 # Usage: ./goteira.sh [-m] alvo
@@ -24,6 +24,12 @@
 # */5 * * * * /opt/goteira.sh -m 8.8.8.8 >> /var/log/goteira/goteira.log
 #
 set -u
+
+# Deprecation notice: only on an interactive terminal, so cron jobs that
+# redirect stderr into the log (2>&1) are not polluted.
+if [ -t 2 ]; then
+    echo "AVISO: goteira.sh esta DEPRECADO e sera removido na 1.0.0. Migre para a versao Rust: https://github.com/ayubio/goteira" 1>&2
+fi
 
 # Default values
 RUN_MTR=0
