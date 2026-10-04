@@ -222,7 +222,8 @@ sudo snap connect goteira:network-observe
 
 When installed via Snap, reports are written to the standard Snap writable directory, detected through `$SNAP_COMMON`:
 
-- **Reports Path**: `/var/snap/goteira/common/YEAR/MONTH/DAY/...`
+- **Reports Path (root, e.g. system cron)**: `/var/snap/goteira/common/YEAR/MONTH/DAY/...`
+- **Reports Path (regular user)**: `~/snap/goteira/common/YEAR/MONTH/DAY/...` (`$SNAP_COMMON` is only writable by root, so the snap falls back to `$SNAP_USER_COMMON`)
 
 For manual installations, the path remains `/var/log/goteira`.
 

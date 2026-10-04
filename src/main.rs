@@ -67,8 +67,7 @@ async fn main() -> Result<()> {
     let timestamp_str = now.format("%d/%m/%y-%H:%M").to_string();
 
     // Determine Report Root Path
-    let report_root =
-        std::env::var("SNAP_COMMON").unwrap_or_else(|_| "/var/log/goteira".to_string());
+    let report_root = resolve_report_root();
     let report_root_cleanup = report_root.clone();
 
     // Cleanup old logs in background
@@ -155,6 +154,42 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Picks the report root. Outside a snap it is /var/log/goteira. Inside a snap
+/// $SNAP_COMMON is only writable by root, so unprivileged users fall back to
+/// $SNAP_USER_COMMON.
+fn resolve_report_root() -> String {
+    let mut candidates = Vec::new();
+    for var in ["SNAP_COMMON", "SNAP_USER_COMMON"] {
+        if let Ok(v) = std::env::var(var) {
+            candidates.push(v);
+        }
+    }
+    if candidates.is_empty() {
+        return "/var/log/goteira".to_string();
+    }
+    pick_writable_root(&candidates)
+}
+
+/// First candidate that can be written to; the first one if none can (so the
+/// usual "failed to create report directory" error still names it).
+fn pick_writable_root(candidates: &[String]) -> String {
+    candidates
+        .iter()
+        .find(|dir| is_writable_dir(dir))
+        .unwrap_or(&candidates[0])
+        .clone()
+}
+
+fn is_writable_dir(dir: &str) -> bool {
+    if fs::create_dir_all(dir).is_err() {
+        return false;
+    }
+    let probe = Path::new(dir).join(format!(".goteira-write-test-{}", std::process::id()));
+    let ok = fs::File::create(&probe).is_ok();
+    let _ = fs::remove_file(&probe);
+    ok
+}
+
 async fn clean_old_logs(root: &str) -> Result<()> {
     // find root -type f -mtime +30 -delete
     Command::new("find")
@@ -184,6 +219,19 @@ mod tests {
             format_ping_line("14/02/26-18:24", &r, "8.8.8.8"),
             "[14/02/26-18:24]\t0.0%\t3.1/6.2/83.5/3.2\t8.8.8.8"
         );
+    }
+
+    #[test]
+    fn picks_first_writable_report_root() {
+        let tmp = std::env::temp_dir().join(format!("goteira-test-{}", std::process::id()));
+        let tmp = tmp.to_string_lossy().to_string();
+        // /proc is never writable, so the second candidate must win
+        let roots = vec!["/proc/goteira-nope".to_string(), tmp.clone()];
+        assert_eq!(pick_writable_root(&roots), tmp);
+        // all unwritable: report the first, so the error message names it
+        let none = vec!["/proc/a".to_string(), "/proc/b".to_string()];
+        assert_eq!(pick_writable_root(&none), "/proc/a");
+        let _ = fs::remove_dir_all(&tmp);
     }
 
     #[test]

@@ -224,7 +224,8 @@ sudo snap connect goteira:network-observe
 
 Quando instalado via Snap, os relatórios são gravados no diretório de escrita padrão do Snap, detectado pela variável `$SNAP_COMMON`:
 
-- **Caminho dos Relatórios**: `/var/snap/goteira/common/ANO/MES/DIA/...`
+- **Caminho dos Relatórios (root, ex.: cron do sistema)**: `/var/snap/goteira/common/ANO/MES/DIA/...`
+- **Caminho dos Relatórios (usuário comum)**: `~/snap/goteira/common/ANO/MES/DIA/...` (o `$SNAP_COMMON` só é gravável pelo root, então o snap usa `$SNAP_USER_COMMON`)
 
 Para instalações manuais, o caminho permanece sendo `/var/log/goteira`.
 
